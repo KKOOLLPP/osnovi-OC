@@ -1,0 +1,81 @@
+#include <windows.h>
+#include <stdio.h>
+#include <string.h>
+
+BOOL TerminateProcessById(DWORD dwProcessId, UINT dwExitCode){    
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, dwProcessId); // доступ к процессу с правами на завершение, процесс наследия дескриптора.  
+    if (hProcess != NULL) {
+        TerminateProcess(hProcess, dwExitCode);
+        CloseHandle(hProcess);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+void CreateProcesss(){
+    STARTUPINFO si = {0};
+    PROCESS_INFORMATION pi = {0};
+
+    si.cb = sizeof(si);
+
+   if (CreateProcess(
+    "C:\\Windows\\System32\\notepad.exe",
+    NULL, 
+    NULL, 
+    NULL,
+    FALSE,
+    0,
+    NULL,
+    NULL,
+    &si,
+    &pi
+    ))
+    {
+        printf("PID %lu\n", pi.dwProcessId);
+       
+    
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    }
+
+}
+
+
+
+int main(){
+
+    int choice;
+
+    while (1){
+        printf("1. Create process\n");
+        printf("2. Terminate process\n");
+        printf("3. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) {
+            case 1:
+                CreateProcesss();
+                break;
+            case 2:
+            {
+              DWORD pid;
+              printf("Enter PID to terminate: ");
+              scanf("%lu", &pid);
+              if (TerminateProcessById(pid,0)){
+                printf("Process terminated \n");
+            }
+            else{
+                printf("Process not terminated \t");
+            }
+                break;
+            }
+            case 3:
+                return 0;
+            default:
+                printf("Invalid choice. Please try again.\n");
+        }
+    }
+
+    return 0;
+}
