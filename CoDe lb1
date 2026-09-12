@@ -31,7 +31,7 @@ BOOL CreateProcesss(){
     CloseHandle(pi.hThread);
 }
 
-BOOL TerminateProcess(DWORD dwProcessId, UINT dwExitCode){    
+BOOL TerminateProcessID(DWORD dwProcessId, UINT dwExitCode){    
     HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, dwProcessId); // доступ к процессу с правами на завершение, процесс наследия дескриптора.  
     if (hProcess != NULL) {
         TerminateProcess(hProcess, dwExitCode);
@@ -62,7 +62,7 @@ int main(){
               DWORD pid;
               printf("Enter PID to terminate: ");
               scanf("%lu", &pid);
-              if (TerminateProcess(pid,0)){
+              if (TerminateProcessID(pid,0)){
                 printf("Process terminated \n");
             }
             else{
