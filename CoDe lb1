@@ -1,0 +1,81 @@
+#include <windows.h>
+#include <stdio.h>
+#include <string.h>
+
+BOOL CreateProcesss(){
+    STARTUPINFO si = {0};
+    PROCESS_INFORMATION pi = {0};
+    char programPath[MAX_PATH];
+
+    si.cb = sizeof(si);
+
+    printf("Enter the path of the program to create: \n");
+    scanf("%s", programPath);
+
+    CreateProcess(
+    NULL,
+    programPath, 
+    NULL, 
+    NULL,
+    FALSE,
+    0,
+    NULL,
+    NULL,
+    &si,
+    &pi
+    );
+
+    printf("Process created with PID: %lu\n", pi.dwProcessId);
+
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+}
+
+BOOL TerminateProcess(DWORD dwProcessId, UINT dwExitCode){    
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, dwProcessId); // доступ к процессу с правами на завершение, процесс наследия дескриптора.  
+    if (hProcess != NULL) {
+        TerminateProcess(hProcess, dwExitCode);
+        CloseHandle(hProcess);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+
+int main(){
+
+    int choice;
+
+    while (1){
+        printf("1. Create process\n");
+        printf("2. Terminate process\n");
+        printf("3. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) {
+            case 1:
+                CreateProcesss();
+                break;
+            case 2:
+            {
+              DWORD pid;
+              printf("Enter PID to terminate: ");
+              scanf("%lu", &pid);
+              if (TerminateProcess(pid,0)){
+                printf("Process terminated \n");
+            }
+            else{
+                printf("Process not terminated \t");
+            }
+                break;
+            }
+            case 3:
+                return 0;
+            default:
+                printf("Invalid choice. Please try again.\n");
+        }
+    }
+
+    return 0;
+}
