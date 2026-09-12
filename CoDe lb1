@@ -62,7 +62,7 @@ int main(){
               DWORD pid;
               printf("Enter PID to terminate: ");
               scanf("%lu", &pid);
-              if (TerminateProcessById(pid,0)){
+              if (TerminateProcess(pid,0)){
                 printf("Process terminated \n");
             }
             else{
