@@ -1,0 +1,87 @@
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <windows.h>
+#include <stdio.h>
+#include <string.h>
+
+BOOL CreateProcesss() {
+    STARTUPINFO si = { 0 };
+    PROCESS_INFORMATION pi = { 0 };
+    wchar_t programPath[MAX_PATH];
+
+    si.cb = sizeof(si);
+
+    wprintf(L"Enter the path of the program to create: \n");
+    wscanf(L"%ls", programPath);
+
+    if (!CreateProcess(
+        NULL,
+        programPath,
+        NULL,
+        NULL,
+        FALSE,
+        0,
+        NULL,
+        NULL,
+        &si,
+        &pi))
+    {
+        wprintf(L"CreateProcess FAILED. Error code: %lu\n", GetLastError());
+        return FALSE;
+    }
+
+    wprintf(L"Process created with PID: %lu\n", pi.dwProcessId);
+
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return TRUE;
+}
+
+BOOL TerminateProcessID(DWORD dwProcessId, UINT dwExitCode) {
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, dwProcessId); // доступ к процессу с правами на завершение, процесс наследия дескриптора.  
+    if (hProcess != NULL) {
+        TerminateProcess(hProcess, dwExitCode);
+        CloseHandle(hProcess);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+
+int main() {
+
+    int choice;
+
+    while (1) {
+        wprintf(L"1. Create process\n");
+        wprintf(L"2. Terminate process\n");
+        wprintf(L"3. Exit\n");
+        wprintf(L"Enter your choice: ");
+        wscanf(L"%d", &choice);
+
+        switch (choice) {
+        case 1:
+            CreateProcesss();
+            break;
+        case 2:
+        {
+            DWORD pid;
+            wprintf(L"Enter PID to terminate: ");
+            wscanf(L"%lu", &pid);
+            if (TerminateProcessID(pid, 0)) {
+                wprintf(L"Process terminated \n");
+            }
+            else {
+                wprintf(L"Process not terminated \n");
+            }
+            break;
+        }
+        case 3:
+            return 0;
+        default:
+            wprintf(L"Invalid choice. Please try again.\n");
+        }
+    }
+
+    return 0;
+}
