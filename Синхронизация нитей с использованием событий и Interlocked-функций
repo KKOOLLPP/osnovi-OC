@@ -1,0 +1,120 @@
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <windows.h>
+#include <iostream>
+#include <stdio.h>
+
+long volatile x;
+long d, z, s;
+
+
+HANDLE event1;
+HANDLE event2;
+HANDLE event3;
+HANDLE event4;
+
+
+DWORD WINAPI POTOK1(LPVOID) {
+	WaitForSingleObject(event1, INFINITE);
+	InterlockedIncrement(&x);
+
+	printf("эвент 1. x = %ld\n", InterlockedCompareExchange(&x,0, 0)); // ,безопасное чтение  x из дркгого потока
+	ResetEvent(event1);
+	SetEvent(event2);
+
+	return 0;
+}
+
+DWORD WINAPI POTOK2(LPVOID) {
+	WaitForSingleObject(event2, INFINITE);
+	InterlockedDecrement(&x);
+
+	printf("эвент 2. x = %ld\n", InterlockedCompareExchange(&x, 0, 0));
+	ResetEvent(event2);
+	SetEvent(event3);
+
+	return 0;
+}
+
+
+DWORD WINAPI POTOK3(LPVOID) {
+	WaitForSingleObject(event3, INFINITE);
+	InterlockedCompareExchange(&x,  d,  s);
+
+	printf("эвент 3. x = %ld\n", InterlockedCompareExchange(&x, 0, 0));
+	ResetEvent(event3);
+	SetEvent(event4);
+
+	return 0;
+}
+
+
+DWORD WINAPI POTOK4(LPVOID) {
+	WaitForSingleObject(event4, INFINITE);
+	InterlockedExchangeAdd(&x, z);
+
+	printf("эвент 4. x = %ld\n", InterlockedCompareExchange(&x, 0, 0));
+	ResetEvent(event4);
+	SetEvent(event1);
+
+	return 0;
+}
+
+
+
+int main() {
+
+	SetConsoleOutputCP(1251);
+	SetConsoleCP(1251);
+
+
+	printf("Введите значения для x: ");
+	scanf_s("%ld", &x);
+
+	printf("Введите значения на которое будет меняться x: ");
+	scanf_s("%ld", &d);
+
+	printf("Введите значения x, если хотеть заменить x: ");
+	scanf_s("%ld", &s);
+
+	printf("Введите значения  которое будет +/- к x: ");
+	scanf_s("%ld", &z);
+
+	event1 = CreateEvent(NULL, FALSE, TRUE, NULL); // Атрибуты безопасности, ручной спрос, установленно ли событие, имя событие
+	event2 = CreateEvent(NULL, FALSE, FALSE, NULL);
+	event3 = CreateEvent(NULL, FALSE, FALSE, NULL);
+	event4 = CreateEvent(NULL, FALSE, FALSE, NULL);
+
+	if (event1 == NULL || event2 == NULL || event3 == NULL || event4 == NULL) {
+		wprintf(L"Ошибка создания эвента");
+		return 1;
+	}
+
+	HANDLE thrread1 = CreateThread(NULL, 0, POTOK1, NULL, 0, NULL);
+	HANDLE thrread2 = CreateThread(NULL, 0, POTOK2, NULL, 0, NULL);
+	HANDLE thrread3 = CreateThread(NULL, 0, POTOK3, NULL, 0, NULL);
+	HANDLE thrread4 = CreateThread(NULL, 0, POTOK4, NULL, 0, NULL);
+
+	if (thrread1 == NULL || thrread2 == NULL || thrread3 == NULL || thrread4 == NULL) {
+		wprintf(L"Ошибка создания потока \n");
+		return 1;
+	}
+
+	HANDLE Thread[4] = { thrread1,thrread2, thrread3, thrread4 };
+
+	WaitForMultipleObjects(4, Thread, TRUE, INFINITE);
+
+	CloseHandle(thrread1);
+	CloseHandle(thrread2);
+	CloseHandle(thrread3);
+	CloseHandle(thrread4);
+
+	CloseHandle(event1);
+	CloseHandle(event2);
+	CloseHandle(event3);
+	CloseHandle(event4);
+
+	printf("Итоговое значение x: %ld\n", x);
+
+	return 0;
+}
