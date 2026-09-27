@@ -1,0 +1,101 @@
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <windows.h>
+#include <iostream>
+#include <stdio.h>
+
+#define MAX_THREADS 1000
+
+long volatile x;
+long z, y, newX;
+
+
+HANDLE event[MAX_THREADS];
+HANDLE thread[MAX_THREADS];
+
+
+DWORD WINAPI POTOK(LPVOID lpParam) {
+	int id = (int)(INT_PTR)lpParam;
+	int nextID = (id + 1) % z;
+
+	for (int i = 0; i < y; i++) {
+		if ((event[id]) != NULL){
+			WaitForSingleObject(event[id], INFINITE);
+		}
+		if (id == 0) {
+			printf("\n новый цикл %d \n", i + 1);
+		}
+		InterlockedIncrement(&x);
+		printf("Поток %d. x = %ld\n", id, InterlockedCompareExchange(&x, 0, 0));
+		if ((event[nextID]) != NULL) {
+			SetEvent(event[nextID]);
+		}
+	}
+	return 0;
+}
+
+
+
+int main() {
+
+	SetConsoleOutputCP(1251);
+	SetConsoleCP(1251);
+
+	ZeroMemory(event, sizeof(event));
+	ZeroMemory(thread, sizeof(thread));
+
+	newX = 0;
+	printf("Введите значения для x: ");
+	scanf_s("%ld", &newX);
+	InterlockedExchange(&x, newX);
+
+	printf("Введите значения для числа потоков: ");
+	scanf_s("%ld", &z);
+
+	if (z <= NULL || z > MAX_THREADS) {
+		printf("Недопустимое количество потоков");
+		return 0;
+	}
+
+	printf("Введите значения для циклов: ");
+	scanf_s("%ld", &y);
+
+	for (int i = 0; i < z; i++) {
+		event[i] = CreateEvent(NULL, FALSE, (i == 0) ? TRUE : FALSE , NULL); // Атрибуты безопасности, ручной спрос, установленно ли событие, имя событие
+		
+		if (event == NULL) {
+			printf("Ошибка создания эвента");
+			return 1;
+		}
+	}
+
+	for (int i = 0; i < z; i++) {
+		thread[i] = CreateThread(NULL, 0, POTOK, (LPVOID)(INT_PTR)i, 0, NULL);
+		
+		if (thread == NULL) {
+			printf("Ошибка создания потока \n");
+			return 1;
+		}
+	}
+
+	for (int i = 0; i < z; i++) {
+		if (thread[i] != NULL) {
+			WaitForSingleObject(thread[i], INFINITE);
+		}
+	}
+
+	for (int i = 0; i < z; i++) {
+		if (thread[i] != NULL) {
+			CloseHandle(thread[i]);
+			thread[i] = NULL;
+		}
+		if (event[i] != NULL) {
+			CloseHandle(event[i]);
+			event[i] = NULL;
+		}
+	}
+
+	printf("Итоговое значение x: %ld\n", InterlockedCompareExchange(&x, 0, 0));
+
+	return 0;
+}
