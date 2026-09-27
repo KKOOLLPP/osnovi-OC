@@ -4,59 +4,33 @@
 #include <iostream>
 #include <stdio.h>
 
+#define MAX_THREADS 1000
+
 long volatile x;
-long d, z, s;
+long z, y, newX;
 
 
-HANDLE event1;
-HANDLE event2;
-HANDLE event3;
-HANDLE event4;
+HANDLE event[MAX_THREADS];
+HANDLE thread[MAX_THREADS];
 
 
-DWORD WINAPI POTOK1(LPVOID) {
-	WaitForSingleObject(event1, INFINITE);
-	InterlockedIncrement(&x);
+DWORD WINAPI POTOK(LPVOID lpParam) {
+	int id = (int)(INT_PTR)lpParam;
+	int nextID = (id + 1) % z;
 
-	printf("эвент 1. x = %ld\n", InterlockedCompareExchange(&x,0, 0)); // ,безопасное чтение  x из дркгого потока
-	ResetEvent(event1);
-	SetEvent(event2);
-
-	return 0;
-}
-
-DWORD WINAPI POTOK2(LPVOID) {
-	WaitForSingleObject(event2, INFINITE);
-	InterlockedDecrement(&x);
-
-	printf("эвент 2. x = %ld\n", InterlockedCompareExchange(&x, 0, 0));
-	ResetEvent(event2);
-	SetEvent(event3);
-
-	return 0;
-}
-
-
-DWORD WINAPI POTOK3(LPVOID) {
-	WaitForSingleObject(event3, INFINITE);
-	InterlockedCompareExchange(&x,  d,  s);
-
-	printf("эвент 3. x = %ld\n", InterlockedCompareExchange(&x, 0, 0));
-	ResetEvent(event3);
-	SetEvent(event4);
-
-	return 0;
-}
-
-
-DWORD WINAPI POTOK4(LPVOID) {
-	WaitForSingleObject(event4, INFINITE);
-	InterlockedExchangeAdd(&x, z);
-
-	printf("эвент 4. x = %ld\n", InterlockedCompareExchange(&x, 0, 0));
-	ResetEvent(event4);
-	SetEvent(event1);
-
+	for (int i = 0; i < y; i++) {
+		if ((event[id]) != NULL){
+			WaitForSingleObject(event[id], INFINITE);
+		}
+		if (id == 0) {
+			printf("\n новый цикл %d \n", i + 1);
+		}
+		InterlockedIncrement(&x);
+		printf("Поток %d. x = %ld\n", id, InterlockedCompareExchange(&x, 0, 0));
+		if ((event[nextID]) != NULL) {
+			SetEvent(event[nextID]);
+		}
+	}
 	return 0;
 }
 
@@ -67,54 +41,61 @@ int main() {
 	SetConsoleOutputCP(1251);
 	SetConsoleCP(1251);
 
+	ZeroMemory(event, sizeof(event));
+	ZeroMemory(thread, sizeof(thread));
 
+	newX = 0;
 	printf("Введите значения для x: ");
-	scanf_s("%ld", &x);
+	scanf_s("%ld", &newX);
+	InterlockedExchange(&x, newX);
 
-	printf("Введите значения на которое будет меняться x: ");
-	scanf_s("%ld", &d);
-
-	printf("Введите значения x, если хотеть заменить x: ");
-	scanf_s("%ld", &s);
-
-	printf("Введите значения  которое будет +/- к x: ");
+	printf("Введите значения для числа потоков: ");
 	scanf_s("%ld", &z);
 
-	event1 = CreateEvent(NULL, FALSE, TRUE, NULL); // Атрибуты безопасности, ручной спрос, установленно ли событие, имя событие
-	event2 = CreateEvent(NULL, FALSE, FALSE, NULL);
-	event3 = CreateEvent(NULL, FALSE, FALSE, NULL);
-	event4 = CreateEvent(NULL, FALSE, FALSE, NULL);
-
-	if (event1 == NULL || event2 == NULL || event3 == NULL || event4 == NULL) {
-		wprintf(L"Ошибка создания эвента");
-		return 1;
+	if (z <= NULL || z > MAX_THREADS) {
+		printf("Недопустимое количество потоков");
+		return 0;
 	}
 
-	HANDLE thrread1 = CreateThread(NULL, 0, POTOK1, NULL, 0, NULL);
-	HANDLE thrread2 = CreateThread(NULL, 0, POTOK2, NULL, 0, NULL);
-	HANDLE thrread3 = CreateThread(NULL, 0, POTOK3, NULL, 0, NULL);
-	HANDLE thrread4 = CreateThread(NULL, 0, POTOK4, NULL, 0, NULL);
+	printf("Введите значения для циклов: ");
+	scanf_s("%ld", &y);
 
-	if (thrread1 == NULL || thrread2 == NULL || thrread3 == NULL || thrread4 == NULL) {
-		wprintf(L"Ошибка создания потока \n");
-		return 1;
+	for (int i = 0; i < z; i++) {
+		event[i] = CreateEvent(NULL, FALSE, (i == 0) ? TRUE : FALSE , NULL); // Атрибуты безопасности, ручной спрос, установленно ли событие, имя событие
+		
+		if (event == NULL) {
+			printf("Ошибка создания эвента");
+			return 1;
+		}
 	}
 
-	HANDLE Thread[4] = { thrread1,thrread2, thrread3, thrread4 };
+	for (int i = 0; i < z; i++) {
+		thread[i] = CreateThread(NULL, 0, POTOK, (LPVOID)(INT_PTR)i, 0, NULL);
+		
+		if (thread == NULL) {
+			printf("Ошибка создания потока \n");
+			return 1;
+		}
+	}
 
-	WaitForMultipleObjects(4, Thread, TRUE, INFINITE);
+	for (int i = 0; i < z; i++) {
+		if (thread[i] != NULL) {
+			WaitForSingleObject(thread[i], INFINITE);
+		}
+	}
 
-	CloseHandle(thrread1);
-	CloseHandle(thrread2);
-	CloseHandle(thrread3);
-	CloseHandle(thrread4);
+	for (int i = 0; i < z; i++) {
+		if (thread[i] != NULL) {
+			CloseHandle(thread[i]);
+			thread[i] = NULL;
+		}
+		if (event[i] != NULL) {
+			CloseHandle(event[i]);
+			event[i] = NULL;
+		}
+	}
 
-	CloseHandle(event1);
-	CloseHandle(event2);
-	CloseHandle(event3);
-	CloseHandle(event4);
-
-	printf("Итоговое значение x: %ld\n", x);
+	printf("Итоговое значение x: %ld\n", InterlockedCompareExchange(&x, 0, 0));
 
 	return 0;
 }
