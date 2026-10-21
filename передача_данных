@@ -1,0 +1,153 @@
+#include <windows.h>
+#include <stdio.h>
+#include <locale.h>
+#include <string.h>
+#include <windows.h>
+
+#define MAX_THREADS 1000
+
+LPCTSTR SlotName = "\\\\.\\mailslot\\sample_mailslot";
+char   szBuf[512];
+HANDLE hSlot, hfile;
+HANDLE hSync, hTimer;
+HANDLE thread[MAX_THREADS];
+OVERLAPPED ovREAD = { 0 }, ovWRITE = { 0 };
+DWORD StartTick = 0;
+DWORD busyTime = 0; 
+DWORD written, t;
+
+VOID CALLBACK WriteComplete(DWORD err, DWORD bytes, LPOVERLAPPED ov) {}
+VOID CALLBACK ReadComplete(DWORD err, DWORD bytes, LPOVERLAPPED ov) {
+	szBuf[bytes] = '\0';
+}
+VOID CALLBACK TimerAPCProc(LPVOID arg, DWORD low, DWORD high) {
+	DWORD elapsed = GetTickCount64() - StartTick;
+	DWORD ProcentLoad = (elapsed > 0) ? (busyTime * 100) / elapsed: 0; 
+
+	sprintf_s(szBuf, "Загрузка ЦПУ: %lu", ProcentLoad);
+
+	WriteFileEx(hfile, szBuf, (DWORD)srtlen(szBuf), &ovWRITE, WriteComplete);
+		busyTime = 0;
+		StartTick = GetTickCount64();
+
+} 
+
+DWORD WINAPI ThreadFuncPR(LPVOID lpParm) {
+	LARGE_INTEGER due;
+	int i; 
+
+
+	hfile = CreateFileA(SlotName, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+	if (hfile == INVALID_HANDLE_VALUE) {
+		DWORD err = GetLastError();
+		printf("err %d\n", err);
+		return 0;
+	}
+
+	hTimer = OpenWaitableTimerA(TIMER_ALL_ACCESS, FALSE, "SyncTimer");
+	WaitForSingleObjectEx(hSync, INFINITE, TRUE);
+	CloseHandle(hSync);
+
+	hTimer = CreateWaitableTimer(NULL, FALSE, NULL);
+
+	if (hTimer == NULL) {
+		printf("Ошибка таймера");
+		return 1; 
+	}
+
+	due.QuadPart = -10000000LL;
+
+	SetWaitableTimer(hTimer, &due, 1000, TimerAPCProc, NULL, FALSE);
+
+	StartTick = GetTickCount64();
+
+	for (i = 0; i < 40; i++) {
+		t = GetTickCount64();
+		while (GetTickCount64() - t < 40);
+		busyTime += 40;
+
+		SleepEx(60, TRUE);
+	}
+
+	CancelWaitableTimer(hTimer);
+	CloseHandle(hTimer);
+
+	strcpy_s(szBuf, "exit", szBuf);
+	WriteFile(hfile, szBuf, (DWORD)strlen(szBuf), written, NULL);
+
+	CloseHandle(hfile);
+	return 0;
+}
+
+main() {
+
+	DWORD dwNextSize, cbRead, cMessage, res;
+	LARGE_INTEGER due;
+	HANDLE hSyncTimer, hWaitTimer, hThread, handles[2];
+
+	setlocale(LC_ALL, "Russian");
+
+	hSlot = CreateMailslot(SlotName, 0, MAILSLOT_WAIT_FOREVER, NULL);
+
+	if (hSlot == INVALID_HANDLE_VALUE) {
+		fprintf("Ошибка создания: %d\n", GetLastError);
+		(void)getchar();
+		return FALSE;
+	}
+	else {
+		printf("Mailslot успешно создан\n");
+		return TRUE;
+	}
+
+	SetMailslotInfo(hSlot, 0);
+
+	due.QuadPart = -5000000LL;
+	hSyncTimer = CreateWaitableTimerA(NULL, TRUE, "SyncTimer");
+	SetWaitableTimer(hSyncTimer, &due, 0, NULL, NULL, FALSE);
+
+	due.QuadPart = -20000000LL;
+	hWaitTimer = CreateWaitableTimerA(NULL, FALSE, NULL);
+	SetWaitableTimer(hWaitTimer, &due, 0, NULL, NULL, FALSE);
+
+	hThread = CreateThread(NULL, 0, ThreadFuncPR, NULL, 0, NULL);
+
+	handles[1] = hThread;
+	handles[2] = hWaitTimer;
+
+	while (1) {
+		GetMailslotInfo(hSlot, NULL, &dwNextSize, &cMessage, NULL);
+
+		if (dwNextSize != MAILSLOT_NO_MESSAGE) {
+			if (dwNextSize <= 4) {
+				ReadFile(hSlot, szBuf, dwNextSize, &cbRead, NULL);
+				szBuf[cbRead] = '\0';
+			}
+			else
+			{
+				ReadFileEx(hSlot, szBuf, dwNextSize, &ovREAD, ReadComplete);
+
+				SleepEx(10, TRUE);
+			}
+
+			printf("Получено: <%s>\n", szBuf);
+			if (strcmp(szBuf, "exit") == 0) break;
+
+			SetWaitableTimer(hWaitTimer, &due, 0, NULL, NULL, FALSE);
+		}
+		else {
+			res = WaitForMultipleObjectsEx(2, handles, FALSE, 50, TRUE);
+			if (res == WAIT_OBJECT_0) {
+				break;
+			}
+		}
+	}
+
+	CloseHandle(hThread);
+	CloseHandle(hSyncTimer);
+	CloseHandle(hWaitTimer);
+	CloseHandle(hSlot);
+
+	printf("Работа завершена. Нажмите Enter для выхода\n");
+	(void)getchar();
+	return 0;
+}
